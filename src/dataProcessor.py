@@ -75,12 +75,14 @@ class GraphDataset(Dataset):
             self.numItems += 1
             print(f"{len(trainRowIndices)} Interactions in Training Dataset")
             print(f"{len(testRowIndices)} Interactions in Testing Dataset")
-            print(f"{self.datasetName} Sparsity:"
-                  f"{(len(trainRowIndices) + len(testRowIndices)) / self.numUsers / self.numItems}")
+            print(
+                f"{self.datasetName} Sparsity:"
+                f"{(len(trainRowIndices) + len(testRowIndices)) / self.numUsers / self.numItems}")
             data = np.ones_like(trainRowIndices)
             # self.adjMatrix: adjacency matrix on traning set
-            self.adjMatrix = csr_matrix((data, (trainRowIndices, trainColIndices)),
-                                        shape=(self.numUsers, self.numItems))
+            self.adjMatrix = csr_matrix(
+                (data, (trainRowIndices, trainColIndices)), shape=(
+                    self.numUsers, self.numItems))
             self.userDArray = np.array(self.adjMatrix.sum(axis=0)).squeeze()
             self.userDArray[self.userDArray == 0.] = 1
             self.itemDArray = np.array(self.adjMatrix.sum(axis=1)).squeeze()
@@ -117,15 +119,18 @@ class GraphDataset(Dataset):
         # npzFileName = "s_pre_adj_mat.npz"
         npzFileName = "normAdjMatrix.npz"
 
-        def transCsrMatrix2SparseTensor(csrMatrix: csr_matrix) -> torch.sparse.FloatTensor:
+        def transCsrMatrix2SparseTensor(
+                csrMatrix: csr_matrix) -> torch.sparse.FloatTensor:
             """
             Convert CSR_Matrix to Torch Sparse Float Tensor
             :param csrMatrix: CSR_Matrix
             :return: Torch Sparse Float Tensor
             """
             cooMatrix: coo_matrix = csrMatrix.tocoo()
-            matrixTensor = torch.sparse.FloatTensor(torch.LongTensor([cooMatrix.row.tolist(), cooMatrix.col.tolist()]),
-                                                    torch.FloatTensor(cooMatrix.data.astype(np.float32)))
+            # matrixTensor = torch.sparse.FloatTensor(torch.LongTensor([cooMatrix.row.tolist(
+            # ), cooMatrix.col.tolist()]), torch.FloatTensor(cooMatrix.data.astype(np.float32)))
+            matrixTensor = torch.sparse_coo_tensor(torch.LongTensor([cooMatrix.row.tolist(), cooMatrix.col.tolist()]),
+                                                   torch.FloatTensor(cooMatrix.data.astype(np.float32)))
             return matrixTensor
 
         if self.normGraph is None:
@@ -134,7 +139,9 @@ class GraphDataset(Dataset):
                 enPrint("NPZ Matrix Loaded Successfully...")
             except FileNotFoundError:
                 enPrint("Generating Normalized Adjacency Matrix from Scratch...")
-                normG = sp.dok_matrix((self.numUsers + self.numItems, self.numItems + self.numUsers))
+                normG = sp.dok_matrix(
+                    (self.numUsers + self.numItems,
+                     self.numItems + self.numUsers))
                 normG = normG.tolil()
                 R = self.adjMatrix.tolil()
                 normG[:self.numUsers, self.numUsers:] = R
@@ -157,16 +164,18 @@ class GraphDataset(Dataset):
         """
         Sampling of triplets - User, Positive Sample, Negtive Sample
         :math:`[[sampleUserID_0, posItemID_0, negItemID_0]`,
-        :math:`\cdots,`
+        :math:`\\cdots,`
         :math:`[sampleUserID_n, posItemID_n, negItemID_n]]`
         :return: samples
         """
         samples = []
         posItemIDsList = self.getUserPosItems
-        sampleUserIDs = np.random.randint(0, self.numUsers, self.trainInteractions)
+        sampleUserIDs = np.random.randint(
+            0, self.numUsers, self.trainInteractions)
         for sampleUserID in sampleUserIDs:
             posItemIDs4User = posItemIDsList[sampleUserID]
-            posItemID = posItemIDs4User[np.random.randint(0, len(posItemIDs4User))]
+            posItemID = posItemIDs4User[np.random.randint(
+                0, len(posItemIDs4User))]
             # Negative Item Sampling for **sampleUserID**
             while True:
                 negItemID = np.random.randint(0, self.numItems)

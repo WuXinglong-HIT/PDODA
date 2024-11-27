@@ -44,8 +44,10 @@ setSeed(SEED)
 simplefilter(action="ignore", category=FutureWarning)
 
 # Environment Configuration
-ROOT_PATH = "/".join(os.path.abspath(__file__).split("/")[:-2])  # for Linux Environment
-# ROOT_PATH = "\\".join(os.path.abspath(__file__).split("\\")[:-2])  # for Dos Environment
+ROOT_PATH = "/".join(os.path.abspath(__file__).split("/")
+                     [:-2])  # for Linux Environment
+# ROOT_PATH = "\\".join(os.path.abspath(__file__).split("\\")[:-2])  # for
+# Dos Environment
 LOG_PATH = os.path.join(ROOT_PATH, "log")
 DATA_PATH = os.path.join(ROOT_PATH, "data")
 BOARD_PATH = os.path.join(LOG_PATH, "runs")
@@ -55,10 +57,15 @@ DUMP_FILE_PREFIX = MODEL_DUMP_FILENAME.split("epoch")[0]
 DUMP_FILE_SUFFIX = ".pth.tar"
 
 # TensorBoard
-writer = SummaryWriter(logdir=os.path.join(BOARD_PATH,
-                                           args.prefix + time.strftime("%Y%m%d-%Hh%Mm%Ss",
-                                                                             time.localtime(time.time()))),
-                       comment=PREFIX)
+writer = SummaryWriter(
+    logdir=os.path.join(
+        BOARD_PATH,
+        args.prefix +
+        time.strftime(
+            "%Y%m%d-%Hh%Mm%Ss",
+            time.localtime(
+                time.time()))),
+    comment=PREFIX)
 
 
 # Train
@@ -80,8 +87,11 @@ def train(userIDs, posItemIDs, negItemIDs, epoch):
     averageLoss = 0.
     for (batchIter, (batchUser, batchPos, batchNeg)) in enumerate(
             miniBatch(userIDs, posItemIDs, negItemIDs, batchSize=BATCH_SIZE)):
-        loss, regEmbedTerm, regBehavTerm = model.bprLoss(userIDs=batchUser, posItemIDs=batchPos, negItemIDs=batchNeg)
-        print(f"\tLOSS:{loss:.4f}\tREG1:{regEmbedTerm:.4f}\tREG2:{regBehavTerm:.4f}", end='\t')
+        loss, regEmbedTerm, regBehavTerm = model.bprLoss(
+            userIDs=batchUser, posItemIDs=batchPos, negItemIDs=batchNeg)
+        print(
+            f"\tLOSS:{loss:.4f}\tREG1:{regEmbedTerm:.4f}\tREG2:{regBehavTerm:.4f}",
+            end='\t')
         loss += regEmbedTerm * WEIGHT_DECAY1 + regBehavTerm * WEIGHT_DECAY2
         print(f"Total LOSS:{loss:.4f}")
         # gradient propagation
@@ -91,7 +101,11 @@ def train(userIDs, posItemIDs, negItemIDs, epoch):
         # Tensorboard Writing
         averageLoss += loss.item()
         globalTrainStep += 1
-        writer.add_scalar("Train/BPR_LOSS", loss.item(), global_step=globalTrainStep, walltime=time.time())
+        writer.add_scalar(
+            "Train/BPR_LOSS",
+            loss.item(),
+            global_step=globalTrainStep,
+            walltime=time.time())
 
     averageLoss /= batchIterNum
     print(f"[EPOCH {epoch:4d}] - [LOSS]: {averageLoss: .3f}")
@@ -115,8 +129,14 @@ def test(testSampleData: dict, globalStep: int):
         batchPrecisions = []
         batchNDCGs = []
         for batchUserIDs in miniBatch(testUserIDs, batchSize=TEST_BATCH_SIZE):
-            groundTruePosItems = [testSampleData[userID] for userID in batchUserIDs]
+            groundTruePosItems = [testSampleData[userID]
+                                  for userID in batchUserIDs]
             testRatings = model.getRatings(batchUserIDs)
+            # userPosItems = graph.getUserPosItems
+            # max_len = max(len(sub_lst) for sub_lst in userPosItems)
+            # paddedList = [np.pad(subList, (0, max_len - len(subList)), constant_values=(0,)) for subList in userPosItems]
+            # userPosItems = np.array(paddedList)
+            # trainPosItems4Users = userPosItems[batchUserIDs]
             trainPosItems4Users = np.array(graph.getUserPosItems)[batchUserIDs]
             for rowIdx, userPosList in enumerate(trainPosItems4Users):
                 testRatings[[rowIdx] * len(userPosList), userPosList] = -np.inf
@@ -125,7 +145,9 @@ def test(testSampleData: dict, globalStep: int):
             del testRatings
             colIndices = colIndices.cpu().numpy()
             groundTruePosItems = np.array(groundTruePosItems)
-            res = isPredOccurrence(predList=colIndices, groundTrueList=groundTruePosItems)
+            res = isPredOccurrence(
+                predList=colIndices,
+                groundTrueList=groundTruePosItems)
             recalls = []
             precisions = []
             ndcgs = []
@@ -147,11 +169,14 @@ def test(testSampleData: dict, globalStep: int):
         metrics[2] = np.sum(batchNDCGs, axis=0)
         metrics /= len(testUserIDs)
         writer.add_scalars(f'Test/Recall',
-                           {'Recall@' + str(TOPK[i]): metrics[0][i] for i in range(len(TOPK))}, globalStep)
+                           {'Recall@' + str(TOPK[i]): metrics[0][i] for i in range(len(TOPK))},
+                           globalStep)
         writer.add_scalars(f'Test/Precision',
-                           {'Precision@' + str(TOPK[i]): metrics[1][i] for i in range(len(TOPK))}, globalStep)
+                           {'Precision@' + str(TOPK[i]): metrics[1][i] for i in range(len(TOPK))},
+                           globalStep)
         writer.add_scalars(f'Test/NDCG',
-                           {'NDCG@' + str(TOPK[i]): metrics[2][i] for i in range(len(TOPK))}, globalStep)
+                           {'NDCG@' + str(TOPK[i]): metrics[2][i] for i in range(len(TOPK))},
+                           globalStep)
         enPrint(f"[TEST]")
         for k in range(len(TOPK)):
             print(f"Recall@{TOPK[k]:2d}: {metrics[0][k]: .6f}", end='\t')
@@ -191,9 +216,11 @@ if __name__ == '__main__':
 
     if IF_LOAD:
         try:
-            model.load_state_dict(torch.load(MODEL_DUMP_FILENAME), strict=False)
+            model.load_state_dict(
+                torch.load(MODEL_DUMP_FILENAME), strict=False)
             enPrint("Model Loaded from Dump File...")
-            test(testSampleData, int(LOAD_MODEL_NAME.split(".")[0].split("-")[-1]))
+            test(testSampleData,
+                 int(LOAD_MODEL_NAME.split(".")[0].split("-")[-1]))
             exit(0)
         except FileNotFoundError as exp:
             print(MODEL_DUMP_FILENAME + " NOT FOUND!")
@@ -208,7 +235,12 @@ if __name__ == '__main__':
         for epoch in range(EPOCHS):
             if epoch % 10 == 0:
                 test(testSampleData, epoch)
-                torch.save(model.state_dict(), DUMP_FILE_PREFIX + "epoch-" + str(epoch) + DUMP_FILE_SUFFIX)
+                torch.save(
+                    model.state_dict(),
+                    DUMP_FILE_PREFIX +
+                    "epoch-" +
+                    str(epoch) +
+                    DUMP_FILE_SUFFIX)
             userID, posItemID, negItemID = trainTripleSampling(graph)
             train(userID, posItemID, negItemID, epoch)
     finally:
