@@ -237,7 +237,7 @@ if __name__ == '__main__':
 
     try:
         for epoch in range(EPOCHS):
-            if epoch % 10 == 0:
+            if epoch % 10 == 0 and epoch >=50:
                 # test(testSampleData, epoch)
                 torch.save(
                     model.state_dict(),
@@ -246,7 +246,7 @@ if __name__ == '__main__':
                     str(epoch) +
                     DUMP_FILE_SUFFIX)
             userID, posItemID, negItemID = trainTripleSampling(graph)
-            train(userID, posItemID, negItemID, epoch)
             test(testSampleData, epoch)
+            train(userID, posItemID, negItemID, epoch)
     finally:
         writer.close()
