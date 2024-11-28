@@ -128,7 +128,7 @@ class PDAGNN(nn.Module):
         self.sslWL.to(device=self.device)
         self.sslWA.to(device=self.device)
 
-        enPrint("MBAGCN Model Loaded...")
+        enPrint("PDODA Model Loaded...")
         enPrint("Embedding Initialization Loaded...")
 
     # def infoNCE(self, features: torch.Tensor, targets: torch.Tensor,
