@@ -106,7 +106,7 @@ def train(userIDs, posItemIDs, negItemIDs, epoch):
         averageLoss += loss.item()
         globalTrainStep += 1
         writer.add_scalar(
-            "Train/BPR_LOSS",
+            "Train/Loss",
             loss.item(),
             global_step=globalTrainStep,
             walltime=time.time())
@@ -238,7 +238,7 @@ if __name__ == '__main__':
     try:
         for epoch in range(EPOCHS):
             if epoch % 10 == 0:
-                test(testSampleData, epoch)
+                # test(testSampleData, epoch)
                 torch.save(
                     model.state_dict(),
                     DUMP_FILE_PREFIX +
@@ -247,5 +247,6 @@ if __name__ == '__main__':
                     DUMP_FILE_SUFFIX)
             userID, posItemID, negItemID = trainTripleSampling(graph)
             train(userID, posItemID, negItemID, epoch)
+            test(testSampleData, epoch)
     finally:
         writer.close()

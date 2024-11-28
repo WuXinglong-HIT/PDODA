@@ -37,7 +37,7 @@ class argParser:
         self.ifLoad = False
         self.ifDropOut = True
         self.keep_prob = 0.6
-        self.load_model_name = "pdoda-epoch-1000.pth.tar"
+        self.load_model_name = "PDODA-epoch-1000.pth.tar"
 
 
 def argParserV2():
