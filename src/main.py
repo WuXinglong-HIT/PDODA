@@ -32,6 +32,9 @@ DATASET = args.dataset
 TOPK = args.topK
 WEIGHT_DECAY1 = args.weight_decay_embed
 WEIGHT_DECAY2 = args.weight_decay_behavior
+WEIGHT_CL_K = args.lambdaK
+WEIGHT_CL_L = args.lambdaL
+WEIGHT_CL_A = args.lambdaA
 FINAL_INTEGRATION = args.final_integration
 IF_REG_BEHAV = args.ifRegBehav
 IF_REG_EMBEDDING = args.ifRegEmbedding
@@ -87,12 +90,13 @@ def train(userIDs, posItemIDs, negItemIDs, epoch):
     averageLoss = 0.
     for (batchIter, (batchUser, batchPos, batchNeg)) in enumerate(
             miniBatch(userIDs, posItemIDs, negItemIDs, batchSize=BATCH_SIZE)):
-        loss, regEmbedTerm, regBehavTerm = model.bprLoss(
+        loss, regEmbedTerm, regBehavTerm, clLossA, clLossL, clLossK = model.bprLoss(
             userIDs=batchUser, posItemIDs=batchPos, negItemIDs=batchNeg)
         print(
-            f"\tLOSS:{loss:.4f}\tREG1:{regEmbedTerm:.4f}\tREG2:{regBehavTerm:.4f}",
+            f"\tLOSS:{loss:.4f}\tREG1:{regEmbedTerm:.4f}\tREG2:{regBehavTerm:.4f}\tCL Loss *:{clLossA:.4f}\tCL Loss L:{clLossL:.4f}\tCL Loss K:{clLossK:.4f}",
             end='\t')
         loss += regEmbedTerm * WEIGHT_DECAY1 + regBehavTerm * WEIGHT_DECAY2
+        loss += clLossA * WEIGHT_CL_A + clLossL * WEIGHT_CL_L + clLossK * WEIGHT_CL_K
         print(f"Total LOSS:{loss:.4f}")
         # gradient propagation
         optimizer.zero_grad()

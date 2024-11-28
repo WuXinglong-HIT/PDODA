@@ -103,18 +103,30 @@ class PDAGNN(nn.Module):
         self.attA.to(device=self.device)
         self.leakyReLU = nn.LeakyReLU(negative_slope=2e-1)
 
-        self.sslTemperatureK = args.tauk
-        self.sslTemperatureL = args.taul
-        self.sslTemperatureS = args.taus
-        self.sslWK = nn.Parameter(torch.zeros(size=(self.embeddingDim, self.embeddingDim)))
-        self.sslWL = nn.Parameter(torch.zeros(size=(self.embeddingDim, self.embeddingDim)))
-        self.sslWS = nn.Parameter(torch.zeros(size=(self.embeddingDim, self.embeddingDim)))
+        self.sslTemperatureK = args.tauK
+        self.sslTemperatureL = args.tauL
+        self.sslTemperatureA = args.tauA
+        self.sslWK = nn.Parameter(
+            torch.zeros(
+                size=(
+                    self.embeddingDim,
+                    self.embeddingDim)))
+        self.sslWL = nn.Parameter(
+            torch.zeros(
+                size=(
+                    self.embeddingDim,
+                    self.embeddingDim)))
+        self.sslWA = nn.Parameter(
+            torch.zeros(
+                size=(
+                    self.embeddingDim,
+                    self.embeddingDim)))
         nn.init.xavier_uniform_(self.sslWK.data, gain=1.414)
         nn.init.xavier_uniform_(self.sslWL.data, gain=1.414)
-        nn.init.xavier_uniform_(self.sslWS.data, gain=1.414)
+        nn.init.xavier_uniform_(self.sslWA.data, gain=1.414)
         self.sslWK.to(device=self.device)
         self.sslWL.to(device=self.device)
-        self.sslWS.to(device=self.device)
+        self.sslWA.to(device=self.device)
 
         enPrint("MBAGCN Model Loaded...")
         enPrint("Embedding Initialization Loaded...")
@@ -150,7 +162,7 @@ class PDAGNN(nn.Module):
                 h.repeat(
                     1, 1, numBehavs).view(
                     batchSize, numBehavs * numBehavs, -1), h.repeat(
-                1, numBehavs, 1)], dim=2).view(
+                    1, numBehavs, 1)], dim=2).view(
             batchSize, numBehavs, -1, 2 * dimOutput)
         # [B, n_b, n_b, 1] -> [B, n_b, n_b]
         attMat = self.leakyReLU(torch.matmul(aInput, self.attA)).squeeze(3)
@@ -177,16 +189,24 @@ class PDAGNN(nn.Module):
         Multi-attribute GCN propagation
         :return: [ userFinalEmbedding, itemFinalEmbedding ]
         """
+        lossKSum = 0.
+        lossLSum = 0.
         finalEmbeds = []
         for behaviorDepth in range(self.numLayers + 1):
-            singleBehaivorEmbed, lossK = self.singleBehaviorPropagation(behaviorDepth)
+            singleBehaivorEmbed, lossK = self.singleBehaviorPropagation(
+                behaviorDepth)
+            lossKSum += lossK
             finalEmbeds.append(singleBehaivorEmbed)
             singleBehaivorEmbed = singleBehaivorEmbed.cpu().detach().numpy()
             del singleBehaivorEmbed
         finalEmbedding = torch.stack(finalEmbeds, dim=0)
         finalEmbeddingMean = torch.mean(finalEmbedding, dim=0)
 
-        def infoNCE(viewLeft: torch.Tensor, viewRight: torch.Tensor, temperature=0.1, b_cos: bool = True):
+        def infoNCE(
+                viewLeft: torch.Tensor,
+                viewRight: torch.Tensor,
+                temperature=0.1,
+                b_cos: bool = True):
             """
             Reference URL: https://blog.csdn.net/weixin_44517742/article/details/138187406
             Calculating SSL InfoNCE Loss Regarding L
@@ -196,15 +216,29 @@ class PDAGNN(nn.Module):
             :param b_cos Bool Value, whether to normalize
             :return          InfoNCE Scalar
             """
-            # TODO: To modify the L-LOSS Term
-            viewRight = torch.permute(1, 0, 2)
+            viewLeft = viewLeft.permute(1, 0, 2)
+            # Duplicating the Mean Tensor to calculate the similarity for each row
+            # Duplication Dimension: (N, D, # attribute)
+            viewRight = viewRight.unsqueeze(2).repeat(1, 1, viewLeft.size(1))
             if b_cos:
-                viewLeft, viewRight = F.normalize(viewLeft, dim=2), F.normalize(viewRight, dim=2)
-            pos_score = torch.matmul(viewLeft, viewRight.T) / temperature
-            score = torch.diagonal(F.log_softmax(pos_score, dim=1), dim1=1, dim2=2)
+                viewLeft, viewRight = F.normalize(
+                    viewLeft, dim=1), F.normalize(
+                    viewRight, dim=2)
+            viewLeft = torch.matmul(viewLeft, self.sslWL)
+            pos_score = torch.matmul(viewLeft, viewRight) / temperature
+            score = torch.diagonal(
+                F.log_softmax(
+                    pos_score,
+                    dim=1),
+                dim1=1,
+                dim2=2)
             return -score.mean()
 
-        lossL = infoNCE(viewLeft=finalEmbedding, viewRight=finalEmbeddingMean, temperature=self.sslTemperatureL)
+        lossL = infoNCE(
+            viewLeft=finalEmbedding,
+            viewRight=finalEmbeddingMean,
+            temperature=self.sslTemperatureL)
+        lossLSum += lossL
 
         if self.finalIntegration == 'MEAN':
             finalEmbedding = torch.mean(finalEmbedding, dim=0)
@@ -228,8 +262,8 @@ class PDAGNN(nn.Module):
         userFinalEmbedding, itemFinalEmbedding = torch.split(
             finalEmbedding, [self.graph.numUsers, self.graph.numItems])
 
-
-        return userFinalEmbedding, itemFinalEmbedding
+        lossKSum /= self.numLayers
+        return userFinalEmbedding, itemFinalEmbedding, lossKSum, lossLSum
 
     def singleBehaviorPropagation(self, maxDepth):
         """
@@ -274,7 +308,11 @@ class PDAGNN(nn.Module):
         LayerEmbeddingStack = torch.stack(layerEmbeddings, dim=0)
         layerEmbeddingMean = torch.mean(LayerEmbeddingStack, dim=0)
 
-        def infoNCE(viewLeft: torch.Tensor, viewRight: torch.Tensor, temperature=0.1, b_cos: bool = True):
+        def infoNCE(
+                viewLeft: torch.Tensor,
+                viewRight: torch.Tensor,
+                temperature=0.1,
+                b_cos: bool = True):
             """
             Reference URL: https://blog.csdn.net/weixin_44517742/article/details/138187406
             Calculating SSL InfoNCE Loss Regarding K
@@ -287,26 +325,72 @@ class PDAGNN(nn.Module):
             viewLeft = viewLeft.permute(1, 0, 2)
             viewRight = viewRight.permute(1, 0, 2)
             if b_cos:
-                viewLeft, viewRight = F.normalize(viewLeft, dim=2), F.normalize(viewRight, dim=2)
+                viewLeft, viewRight = F.normalize(
+                    viewLeft, dim=2), F.normalize(
+                    viewRight, dim=2)
             viewRight = torch.matmul(viewRight, self.sslWK)
-            pos_score = torch.matmul(viewLeft, viewRight.permute(0, 2, 1)) / temperature
-            score = torch.diagonal(F.log_softmax(pos_score, dim=1), dim1=1, dim2=2)
+            pos_score = torch.matmul(
+                viewLeft, viewRight.permute(
+                    0, 2, 1)) / temperature
+            score = torch.diagonal(
+                F.log_softmax(
+                    pos_score,
+                    dim=1),
+                dim1=1,
+                dim2=2)
             return -score.mean()
 
         # Duplicating the Mean Tensor to calculate the similarity for each row
         # Duplication Dimension: (N, 1, 1)
-        tensorMean = layerEmbeddingMean.unsqueeze(0).repeat(LayerEmbeddingStack.size(0),
-                                                            *((LayerEmbeddingStack.ndim - 1) * (1,)))
+        tensorMean = layerEmbeddingMean.unsqueeze(0).repeat(
+            LayerEmbeddingStack.size(0), *((LayerEmbeddingStack.ndim - 1) * (1,)))
 
-        lossK = infoNCE(viewLeft=LayerEmbeddingStack, viewRight=tensorMean, temperature=self.sslTemperatureK)
+        lossK = infoNCE(
+            viewLeft=LayerEmbeddingStack,
+            viewRight=tensorMean,
+            temperature=self.sslTemperatureK)
 
         return layerEmbeddingMean, lossK
 
     def bprLoss(self, userIDs, posItemIDs, negItemIDs):
-        allUserEmbeds, allItemEmbeds = self.propagation()
+        allUserEmbeds, allItemEmbeds, lossK, lossL = self.propagation()
         userEmbeds = allUserEmbeds[userIDs]
         posItemEmbeds = allItemEmbeds[posItemIDs]
         negItemEmbeds = allItemEmbeds[negItemIDs]
+        lossASum = 0.
+
+        def infoNCE(
+                viewLeft: torch.Tensor,
+                viewRight: torch.Tensor,
+                temperature=0.1,
+                b_cos: bool = True):
+            """
+            Reference URL: https://blog.csdn.net/weixin_44517742/article/details/138187406
+            Calculating SSL InfoNCE Loss Regarding Asterisk ( $e^*_u$ )
+            :param viewLeft  Left Tensor
+            :param viewRight Right Tensor
+            :param temperature tau
+            :param b_cos Bool Value, whether to normalize
+            :return          InfoNCE Scalar
+            """
+            if b_cos:
+                viewLeft, viewRight = F.normalize(
+                    viewLeft, dim=1), F.normalize(
+                    viewRight, dim=1)
+            viewLeft = torch.matmul(viewLeft, self.sslWA)
+            pos_score = torch.matmul(viewLeft, viewRight.T) / temperature
+            score = torch.diagonal(F.log_softmax(pos_score, dim=1))
+            return -score.mean()
+
+        lossSUsers = infoNCE(
+            viewLeft=userEmbeds,
+            viewRight=userEmbeds,
+            temperature=self.sslTemperatureA)
+        lossSItems = infoNCE(
+            viewLeft=posItemEmbeds,
+            viewRight=posItemEmbeds,
+            temperature=self.sslTemperatureA)
+        lossASum += lossSUsers + lossSItems
 
         # Regularization Term of Final Embedding
         regEmbedTerm = userEmbeds.norm(2).pow(
@@ -315,7 +399,7 @@ class PDAGNN(nn.Module):
         if self.attNorm == 'GAT-like':
             regEmbedTerm += self.attA.norm(2).pow(2)
             regEmbedTerm += self.attW.norm(2).pow(2) / \
-                            self.attW.size()[0] / self.attW.size()[1]
+                self.attW.size()[0] / self.attW.size()[1]
 
         # Regularization Term of User Behavior Similarity Distance
         regBehavTerm = 0.
@@ -368,7 +452,7 @@ class PDAGNN(nn.Module):
                 dim=1))
         loss = torch.mean(activeDiff)
 
-        return loss, regEmbedTerm, regBehavTerm
+        return loss, regEmbedTerm, regBehavTerm, lossASum, lossL, lossK
 
     def getRatings(self, userIDs: list):
         """
@@ -377,13 +461,13 @@ class PDAGNN(nn.Module):
         :return: according user ratings for all items
         """
         userIDs = torch.LongTensor(userIDs)
-        finalUsers, finalItems = self.propagation()
+        finalUsers, finalItems, _, _ = self.propagation()
         userEmbeds = finalUsers[userIDs]
         userRatings = self.activeLayer(torch.matmul(userEmbeds, finalItems.T))
         return userRatings
 
     def forward(self, userIDs, itemIDs):
-        allUserEmbeddings, allItemEmbeddings = self.propagation()
+        allUserEmbeddings, allItemEmbeddings, _, _ = self.propagation()
         userEmbeds = allUserEmbeddings[userIDs]
         itemEmbeds = allItemEmbeddings[itemIDs]
         ratingPreds = torch.mul(userEmbeds, itemEmbeds)

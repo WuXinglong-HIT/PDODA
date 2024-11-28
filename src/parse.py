@@ -21,10 +21,13 @@ class argParser:
         self.lr = 1e-2
         self.epochs = 1000
         self.seed = 2024
-        self.tauk = 0.1
-        self.taul = 0.1
-        self.taus = 0.1
-        self.prefix = "pdagnn-"
+        self.tauK = 0.1
+        self.tauL = 0.1
+        self.tauA = 0.1
+        self.lambdaK = 1.0
+        self.lambdaL = 1.0
+        self.lambdaA = 1.0
+        self.prefix = "PDODA-"
         self.dataset = 'Amazon-Book'
         self.topK = [5, 10, 20, 30, 50, 100]
         self.ifRegEmbedding = True
@@ -34,7 +37,7 @@ class argParser:
         self.ifLoad = False
         self.ifDropOut = True
         self.keep_prob = 0.6
-        self.load_model_name = "pdagnn-epoch-1000.pth.tar"
+        self.load_model_name = "pdoda-epoch-1000.pth.tar"
 
 
 def argParserV2():
@@ -91,7 +94,37 @@ def argParserV2():
                         help="Max Epochs")
     parser.add_argument('--seed', type=int, default=2022,
                         help="Global Random Seed")
-    parser.add_argument('--prefix', type=str, default="pdagnn-",
+    parser.add_argument(
+        '--tauK',
+        type=float,
+        default=0.1,
+        help="Temperature Coefficient Factor for Contrastive Learning Loss Term $L_u^k$")
+    parser.add_argument(
+        '--tauL',
+        type=float,
+        default=0.1,
+        help="Temperature Coefficient Factor for Contrastive Learning Loss Term $L_u^l$")
+    parser.add_argument(
+        '--tauA',
+        type=float,
+        default=0.1,
+        help="Temperature Coefficient Factor for Contrastive Learning Loss Term $L_u^*$")
+    parser.add_argument(
+        '--lambdaK',
+        type=float,
+        default=1.0,
+        help="Regularization Weight for Contrastive Learning Loss Term $L_u^k$")
+    parser.add_argument(
+        '--lambdaL',
+        type=float,
+        default=1.0,
+        help="Regularization Weight for Contrastive Learning Loss Term $L_u^l$")
+    parser.add_argument(
+        '--lambdaA',
+        type=float,
+        default=1.0,
+        help="Regularization Weight for Contrastive Learning Loss Term $L_u^*$")
+    parser.add_argument('--prefix', type=str, default="PDODA-",
                         help="Model Abbreviation")
     parser.add_argument(
         '--dataset',
@@ -129,7 +162,7 @@ def argParserV2():
     parser.add_argument(
         '--load_model_name',
         type=str,
-        default="pdagnn-epoch-1000.pth.tar",
+        default="pdoda-epoch-1000.pth.tar",
         help="Loaded Model FileName")
     return parser.parse_args()
 
