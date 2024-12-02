@@ -39,13 +39,13 @@ from utils import enPrint
 #         return loss.mean()
 
 
-class PDAGNN(nn.Module):
+class PDODA(nn.Module):
     """
-    Graph Neural Network Model - PDA-GNN
+    Propagation Depth Oriented Data Augmentation Architecture: **PDODA**
     """
 
     def __init__(self, graph: GraphDataset):
-        super(PDAGNN, self).__init__()
+        super(PDODA, self).__init__()
         args = argParser()
         self.graph = graph
 

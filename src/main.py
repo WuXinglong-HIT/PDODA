@@ -14,7 +14,7 @@ from parse import CUDA_AVAILABLE
 from parse import DEVICE
 from utils import enPrint, setSeed
 
-from model import PDAGNN
+from model import PDODA
 from dataProcessor import GraphDataset
 from utils import shuffle, miniBatch
 from utils import isPredOccurrence
@@ -214,7 +214,7 @@ def trainTripleSampling(graph: GraphDataset):
 if __name__ == '__main__':
     graph = GraphDataset(DATASET)
     testSampleData = graph.testSampleDict
-    model = PDAGNN(graph=graph)
+    model = PDODA(graph=graph)
     if CUDA_AVAILABLE:
         model = model.to(DEVICE)
 
@@ -237,7 +237,7 @@ if __name__ == '__main__':
 
     try:
         for epoch in range(EPOCHS):
-            if epoch % 10 == 0 and epoch >=50:
+            if epoch % 10 == 0 and epoch >= 50:
                 # test(testSampleData, epoch)
                 torch.save(
                     model.state_dict(),

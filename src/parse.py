@@ -11,14 +11,14 @@ class argParser:
     """
 
     def __init__(self):
-        self.batch_size = 10240
-        self.test_batch_size = 10240
+        self.batch_size = 1024
+        self.test_batch_size = 1024
         self.embedding_dim = 64
         self.final_integration = 'ATT'
         self.att_norm = 'softmax'
         self.att_hidden_dims = [128, 64, 16, 1]
         self.num_layers = 3
-        self.lr = 1e-2
+        self.lr = 1e-1
         self.epochs = 1000
         self.seed = 2024
         self.tauK = 0.1
